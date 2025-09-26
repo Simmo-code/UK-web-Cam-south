@@ -1,0 +1,201 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Petersfield (UK) Webcams – 20‑mile Radius (expanded)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<style>
+  :root { --panel-bg: rgba(255,255,255,0.98); --border: #e5e7eb; --shadow: 0 10px 30px rgba(0,0,0,0.18); }
+  html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  #map { height: 100%; width: 100%; }
+
+  .fab { position: fixed; right: 14px; bottom: 14px; z-index: 1100; width: 56px; height: 56px; border-radius: 50%; border: none;
+         box-shadow: var(--shadow); background: #111827; color: #fff; font-size: 24px; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); backdrop-filter: blur(1px); z-index: 1000; display: none; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1001; background: var(--panel-bg);
+           border-top-left-radius: 16px; border-top-right-radius: 16px; box-shadow: var(--shadow);
+           transform: translateY(100%); transition: transform 0.28s ease; max-height: 80vh; display: flex; flex-direction: column; }
+  .sheet.open { transform: translateY(0); }
+  .overlay.open { display: block; }
+  .grip { width: 48px; height: 5px; background:#d1d5db; border-radius: 999px; margin: 8px auto; }
+  .sheet-content { padding: 10px 14px 14px; overflow: auto; }
+
+  .h { margin: 0 0 6px 0; font-size: 16px; display:flex; align-items:center; justify-content: space-between; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap: wrap; }
+  .input { flex:1; min-width:140px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); }
+  .chip { border:1px solid var(--border); border-radius:999px; padding:6px 10px; font-size:12px; cursor:pointer; user-select:none; }
+  .btn { border:1px solid var(--border); border-radius:10px; padding:6px 10px; background:#fff; cursor:pointer; }
+  .list { list-style:none; padding:0; margin:0; }
+  .item { padding:8px 0; border-bottom:1px solid var(--border); }
+  .item a { text-decoration:none; font-weight:600; color:#0366d6; }
+  .muted { color:#6b7280; font-size:12px; }
+
+  @media (min-width: 900px) {
+    .sheet { top: 10px; bottom: auto; left: 10px; right: auto; width: 420px; max-height: 80vh; border-radius: 14px; transform: translateX(-110%); }
+    .sheet.open { transform: translateX(0); }
+    .grip { display: none; }
+  }
+
+  details { border:1px solid var(--border); border-radius:10px; padding:8px 10px; margin:10px 0; background: #fff; }
+  summary { cursor:pointer; font-weight:700; }
+  summary::marker { content: ''; }
+  summary::after { content: '▾'; float:right; }
+  details[open] summary::after { content: '▴'; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<button class="fab" id="fab" aria-label="Toggle menu" aria-expanded="false">☰</button>
+<div class="overlay" id="overlay" aria-hidden="true"></div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="title">
+  <div class="grip" id="grip"></div>
+  <div class="sheet-content">
+    <h2 class="h" id="title">Petersfield Webcams (20‑mile radius) <button id="closeBtn" class="chip" aria-label="Close">Close ✕</button></h2>
+
+    <div class="row">
+      <input id="q" class="input" placeholder="Search all lists..." />
+      <label class="chip"><input id="opsToggle" type="checkbox" checked style="margin-right:6px">Show ops/indicators only</label>
+      <button id="addBtn" class="btn">＋ Add custom cam</button>
+    </div>
+
+    <details open>
+      <summary>General webcams</summary>
+      <ul id="genList" class="list"></ul>
+    </details>
+
+    <details open>
+      <summary>Community cams (buildings/harbour)</summary>
+      <ul id="comList" class="list"></ul>
+      <div class="muted">Only public cams intentionally shared by owners/operators are listed.</div>
+    </details>
+
+    <details open>
+      <summary>Traffic cams (roads/motorways)</summary>
+      <ul id="trafficList" class="list"></ul>
+      <div class="muted">Positions are approximate to junction/portal areas; click to view live image.</div>
+    </details>
+
+    <details>
+      <summary>Paragliding & weather</summary>
+      <ul class="list">
+        <li class="item"><a href="https://weather.metoffice.gov.uk/forecast/gcp618npj" target="_blank" rel="noopener">MetOffice – Butser Hill forecast</a></li>
+        <li class="item"><a href="https://en.windfinder.com/webcams/petersfield_england_unitedkingdom" target="_blank" rel="noopener">Windfinder – Petersfield webcams map</a></li>
+        <li class="item"><a href="https://www.windy.com/webcams/1326661089" target="_blank" rel="noopener">Windy – Petersfield webcams map</a></li>
+      </ul>
+    </details>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+  const CENTER = {"name": "Petersfield", "lat": 51.0039, "lon": -0.9331};
+  const RADIUS_M = 32186;
+  const WEBCAMS = [{"name": "Petersfield Town \u2013 multi\u2011view (Petersfield\u2011Cam)", "lat": 51.0042, "lon": -0.9377, "url": "http://www.petersfield-cam.co.uk/", "area": "Petersfield", "ops": ""}, {"name": "Hayling Island \u2013 CBK Kite Beach", "lat": 50.7874, "lon": -0.9755, "url": "https://www.cbk-haylingisland.com/webcam/", "area": "Hayling Island", "ops": "Wind ops"}, {"name": "Portsmouth Harbour \u2013 HMS Warrior (WebcamTaxi)", "lat": 50.8019, "lon": -1.1096, "url": "https://www.webcamtaxi.com/en/england/hampshire/portsmouth-harbour-hmswarrior-cam.html", "area": "Portsmouth", "ops": "Harbour/visibility"}, {"name": "Portsmouth Harbour entrance (Camsecure)", "lat": 50.7934, "lon": -1.1089, "url": "https://www.camsecure.co.uk/portsmouth_harbour_webcam.html", "area": "Portsmouth", "ops": "Harbour/visibility"}, {"name": "Emsworth Yacht Harbour \u2013 list (Meteoblue)", "lat": 50.8468, "lon": -0.936, "url": "https://www.meteoblue.com/en/weather/webcams/hayling-island_united_kingdom_8299619", "area": "Emsworth", "ops": "Harbour/visibility"}];
+  const COMMUNITY = [{"name": "Southsea Seafront / Pier (Camsecure index)", "lat": 50.7816, "lon": -1.0842, "url": "https://www.camsecure.co.uk/portsmouth_webcams.html", "area": "Southsea", "ops": "Community"}, {"name": "Langstone Harbour / Hayling Ferry (Camsecure index)", "lat": 50.7965, "lon": -1.0185, "url": "https://www.camsecure.co.uk/hampshire_webcams.html", "area": "Langstone", "ops": "Community"}, {"name": "Chichester Harbour \u2013 Harbour Office cams (Harbour Conservancy)", "lat": 50.8027, "lon": -0.8638, "url": "https://www.conservancy.co.uk/visiting/webcams/", "area": "Itchenor", "ops": "Community"}, {"name": "Chichester Marina (MDL Marinas listing)", "lat": 50.8069, "lon": -0.8327, "url": "https://www.mdlmarinas.co.uk/marinas/mdl-chichester-marina/", "area": "Chichester Marina", "ops": "Community"}];
+  const TRAFFIC = [{"name": "A3 \u2013 Petersfield Services", "lat": 50.9692, "lon": -0.9402, "url": "https://trafficcameras.uk/a3/", "area": "A3", "ops": "Traffic"}, {"name": "A3 \u2013 Sheet (A272)", "lat": 51.0176, "lon": -0.9264, "url": "https://trafficcameras.uk/a3/", "area": "A3", "ops": "Traffic"}, {"name": "A3 \u2013 Liphook / Longmoor", "lat": 51.0709, "lon": -0.85, "url": "https://trafficcameras.uk/a3/", "area": "A3", "ops": "Traffic"}, {"name": "A3 \u2013 Hindhead Tunnel (S portal)", "lat": 51.1125, "lon": -0.7532, "url": "https://trafficcameras.uk/a3/", "area": "A3", "ops": "Traffic"}, {"name": "A3 \u2013 Hindhead Tunnel (N portal)", "lat": 51.1199, "lon": -0.7335, "url": "https://trafficcameras.uk/a3/", "area": "A3", "ops": "Traffic"}, {"name": "A3 \u2013 Clanfield / QE Country Park", "lat": 50.9481, "lon": -0.99, "url": "https://trafficcameras.uk/a3/", "area": "A3", "ops": "Traffic"}, {"name": "A3(M) \u2013 J1 Bedhampton", "lat": 50.8528, "lon": -1.0122, "url": "https://trafficcameras.uk/a3/", "area": "A3(M)", "ops": "Traffic"}, {"name": "A3(M) \u2013 J2 Waterlooville", "lat": 50.8826, "lon": -1.0389, "url": "https://trafficcameras.uk/a3/", "area": "A3(M)", "ops": "Traffic"}, {"name": "A3(M) \u2013 J3 Horndean", "lat": 50.9069, "lon": -1.0319, "url": "https://trafficcameras.uk/a3/", "area": "A3(M)", "ops": "Traffic"}, {"name": "A3(M) \u2013 J5 to A3 merge", "lat": 50.928, "lon": -1.019, "url": "https://trafficcameras.uk/a3/", "area": "A3(M)", "ops": "Traffic"}, {"name": "A27 \u2013 Emsworth / Warblington", "lat": 50.8522, "lon": -0.9337, "url": "https://trafficcameras.uk/a27/", "area": "A27", "ops": "Traffic"}, {"name": "A27 \u2013 Fishbourne (W)", "lat": 50.8383, "lon": -0.8152, "url": "https://trafficcameras.uk/a27/", "area": "A27", "ops": "Traffic"}, {"name": "A27 \u2013 Stockbridge (C)", "lat": 50.8443, "lon": -0.7913, "url": "https://trafficcameras.uk/a27/", "area": "A27", "ops": "Traffic"}, {"name": "A27 \u2013 Whyke / Portfield (E)", "lat": 50.8369, "lon": -0.7589, "url": "https://trafficcameras.uk/a27/", "area": "A27", "ops": "Traffic"}, {"name": "M27 \u2013 J12 (M275)", "lat": 50.8347, "lon": -1.0806, "url": "https://trafficcameras.uk/m27/", "area": "M27", "ops": "Traffic"}, {"name": "M27 \u2013 J11 (Fareham)", "lat": 50.8559, "lon": -1.2011, "url": "https://trafficcameras.uk/m27/", "area": "M27", "ops": "Traffic"}];
+
+  const map = L.map('map').setView([CENTER.lat, CENTER.lon], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+  L.circle([CENTER.lat, CENTER.lon], { radius: RADIUS_M, color: '#2563eb', weight: 2, fillColor: '#60a5fa', fillOpacity: 0.08 }).addTo(map);
+
+  const genMarkers = L.markerClusterGroup(), comMarkers = L.markerClusterGroup(), trafficMarkers = L.markerClusterGroup();
+
+  function markerHtml(w, tag) {
+    const badge = w.ops ? ` • <em>${w.ops}</em>` : '';
+    return `<strong>${w.name}</strong><br><span class='muted'>${w.area}${badge}${tag ? " • "+tag : ""}</span><br><a href='${w.url}' target='_blank' rel='noopener'>Open webcam</a>`;
+  }
+
+  function addLayer(markers, listEl, data, tag=null) {
+    markers.clearLayers();
+    listEl.innerHTML = data.map(w => `<li class="item"><a href="#" onclick="flyTo(${w.lat},${w.lon});return false;">${w.name}</a> <span class='muted'>(${w.area}${w.ops? " • "+w.ops : ""})</span></li>`).join('');
+    data.forEach(w => markers.addLayer(L.marker([w.lat, w.lon]).bindPopup(markerHtml(w, tag))));
+    if (!map.hasLayer(markers)) map.addLayer(markers);
+  }
+
+  function renderAll(filter='') {
+    const q = filter.toLowerCase();
+    const opsOnly = document.getElementById('opsToggle').checked;
+    const g = WEBCAMS.filter(w => !opsOnly || w.ops).filter(w => !q || w.name.toLowerCase().includes(q) || w.area.toLowerCase().includes(q));
+    const c = COMMUNITY.filter(w => !opsOnly || w.ops).filter(w => !q || w.name.toLowerCase().includes(q) || w.area.toLowerCase().includes(q));
+    const t = TRAFFIC.filter(w => !q || w.name.toLowerCase().includes(q) || w.area.toLowerCase().includes(q));
+
+    addLayer(genMarkers, document.getElementById('genList'), g);
+    addLayer(comMarkers, document.getElementById('comList'), c, 'Community');
+    addLayer(trafficMarkers, document.getElementById('trafficList'), t, 'Traffic');
+
+    fitAllBounds(g, c, t);
+  }
+
+  function fitAllBounds(g, c, t) {
+    const pts = [...g, ...c, ...t].map(w => [w.lat, w.lon]);
+    if (pts.length) map.fitBounds(L.latLngBounds([[CENTER.lat, CENTER.lon], ...pts]), {padding:[20,20]});
+  }
+
+  renderAll();
+
+  // UI toggles
+  const fab = document.getElementById('fab'), sheet = document.getElementById('sheet'), overlay = document.getElementById('overlay'), closeBtn = document.getElementById('closeBtn');
+  function openSheet() { sheet.classList.add('open'); overlay.classList.add('open'); overlay.setAttribute('aria-hidden','false'); fab.setAttribute('aria-expanded','true'); }
+  function closeSheet() { sheet.classList.remove('open'); overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); fab.setAttribute('aria-expanded','false'); }
+  function toggleSheet() { sheet.classList.contains('open') ? closeSheet() : openSheet(); }
+  fab.addEventListener('click', toggleSheet); closeBtn.addEventListener('click', closeSheet); overlay.addEventListener('click', closeSheet);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+  // Drag-to-close on mobile grip
+  let startY = null;
+  document.getElementById('grip').addEventListener('touchstart', e => { startY = e.touches[0].clientY; });
+  document.getElementById('grip').addEventListener('touchmove', e => { if (startY===null) return; const dy = e.touches[0].clientY - startY; if (dy>80) closeSheet(); });
+  document.getElementById('grip').addEventListener('touchend', () => startY = null);
+
+  // Search / filter
+  document.getElementById('q').addEventListener('input', e => renderAll(e.target.value));
+  document.getElementById('opsToggle').addEventListener('change', () => renderAll(document.getElementById('q').value));
+
+  // Fly helper
+  window.flyTo = (lat, lon) => { closeSheet(); map.flyTo([lat, lon], 14, {duration:0.8}); };
+
+  // --- Custom cam adder (localStorage only) ---
+  const addBtn = document.getElementById('addBtn');
+  let placing = false;
+  addBtn.addEventListener('click', () => {
+    placing = !placing;
+    addBtn.textContent = placing ? "Tap map to place…" : "＋ Add custom cam";
+  });
+
+  const customKey = 'custom_webcams_petersfield';
+  function loadCustom() { try { return JSON.parse(localStorage.getItem(customKey)) || []; } catch { return []; } }
+  function saveCustom(arr) { localStorage.setItem(customKey, JSON.stringify(arr)); }
+
+  const customMarkers = L.markerClusterGroup();
+  map.addLayer(customMarkers);
+
+  function renderCustom() {
+    customMarkers.clearLayers();
+    const arr = loadCustom();
+    arr.forEach(w => customMarkers.addLayer(L.marker([w.lat, w.lon]).bindPopup(markerHtml(w, 'Custom'))));
+  }
+  renderCustom();
+
+  map.on('click', (e) => {
+    if (!placing) return;
+    placing = false; addBtn.textContent = "＋ Add custom cam";
+    const lat = e.latlng.lat.toFixed(6), lon = e.latlng.lng.toFixed(6);
+    const name = prompt("Name for this camera?");
+    if (!name) return;
+    const url = prompt("Link to the camera page (https://…)?");
+    if (!url) return;
+    const area = prompt("Area/label (optional)", "Custom");
+    const cam = { name, lat: parseFloat(lat), lon: parseFloat(lon), url, area: area||'Custom', ops: 'User' };
+    const arr = loadCustom(); arr.push(cam); saveCustom(arr); renderCustom();
+    alert("Saved locally on this device. (To make permanent, add to your repo data later.)");
+  });
+</script>
+</body>
+</html>
